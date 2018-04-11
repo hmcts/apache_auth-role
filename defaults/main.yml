@@ -1,0 +1,27 @@
+---
+# These variables should all be overriden with the correct values by the Management role
+apache_auth_name: "HMCTS ELK"
+
+apache_ldap_url: ""
+apache_ldap_bind_dn: ""
+apache_ldap_bind_password: ""
+
+# list of groups that are allowed to login to Kibana
+apache_auth_groups:
+  groups:
+    - "cn=apache,ou=groups,dc=domain,dc=com"
+
+# Where Kibana listens by default.  Should be on localhost to prevent direct remote access
+apache_proxy_dest: "http://127.0.0.1:5601/"
+
+# This is used by the proxy to authenticate with Kibana and is the Searchguard credentials
+apache_proxy_user_username: ""
+apache_proxy_user_password: ""
+
+apache_ldap_ssl_crt: ""
+apache_ldap_ssl_ca:  ""
+apache_ldap_ssl_key: ""
+
+apache_ldap_ssl_crt_dest: "/etc/pki/tls/certs/star.reform.hmcts.net.crt"
+apache_ldap_ssl_ca_dest: "/etc/pki/tls/certs/star.reform.hmcts.net.ca"
+apache_ldap_ssl_key_dest: "/etc/pki/tls/private/star.reform.hmcts.net.key"

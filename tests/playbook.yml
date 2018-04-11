@@ -1,0 +1,38 @@
+---
+- hosts: all
+  tasks:
+    - name: Install test dependencies
+      yum:
+        name: "{{ item }}"
+      with_items:
+        - libsemanage-python
+        - libselinux-python
+        - openssl
+    - name: Create test x509 certificate
+      command: "openssl req -x509 -newkey rsa:4096 -sha256 -nodes -keyout /hmcts.key -out  /hmcts.crt -subj /CN=apachetest.local -days 3650"
+      args:
+        creates: "/hmcts.*"
+    - name: slurp certificate
+      slurp:
+        src: /hmcts.crt
+      register: crtslurp
+    - name: slurp key
+      slurp:
+        src: /hmcts.key
+      register: keyslurp
+
+
+- hosts: all
+  gather_facts: true
+  vars:
+    elastic_user_password: es_u_changeme
+    apache_ldap_url: "ldaps://localhost:636/dc=ldap,dc=local"
+    apache_ldap_bind_dn: "uid=user,ou=People,dc=ldap,dc=local"
+    apache_ldap_bind_password: NOT_A_REAL_PASSWORD
+    apache_proxy_user_username: "proxy_user"
+    apache_proxy_user_password: "proxy_pass"
+    apache_ldap_ssl_crt: "{{ crtslurp['content'] | b64decode }}"
+    apache_ldap_ssl_ca:  "{{ crtslurp['content'] | b64decode }}"
+    apache_ldap_ssl_key: "{{ keyslurp['content'] | b64decode }}"
+  roles:
+    - apache_auth-role

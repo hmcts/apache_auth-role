@@ -1,0 +1,22 @@
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+docker:
+  containers:
+    - name: apache_auth-role-${BRANCH_NAME}-${BUILD_NUMBER}
+      image: centos/systemd
+      image_version: latest
+      # SYS_ADMIN needed for the service module to talk to dbus for starting apache
+      cap_add:
+        - SYS_ADMIN
+      ansible_groups:
+        - apache_auth
+      environment:
+        http_proxy: ${http_proxy}
+ansible:
+  playbook: tests/playbook.yml
+
+verifier:
+  name: testinfra

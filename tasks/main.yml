@@ -1,0 +1,125 @@
+---
+- name: Install Apache and requirements
+  yum:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - mod_ldap
+    - mod_ssl
+
+- name: Allow httpd to connect to ldap
+  seboolean:
+    name: httpd_can_connect_ldap
+    state: "yes"
+    persistent: "yes"
+  when: ansible_selinux is defined and ansible_selinux.status == 'enabled'
+
+# This overwrites the existing mpm configuration to save trying to account for the variaous "LoadModule" statements
+- name: Set Apache to use the event worker
+  shell: echo "LoadModule mpm_event_module modules/mod_mpm_event.so" > /etc/httpd/conf.modules.d/00-mpm.conf
+  changed_when: "False"
+
+- name: Disable unused modules
+  replace:
+    regexp: '^LoadModule {{ item }}_module modules/mod_{{ item }}\.so'
+    replace: '#LoadModule {{ item }} modules/mod_{{ item }}.so'
+    path: /etc/httpd/conf.modules.d/00-base.conf
+  with_items:
+    - autoindex
+    - dbd
+    - echo
+    - suexec
+    - userdir
+  notify:
+    - Restart Apache
+
+# We only care about TLS enabled traffic
+- name: Disable listening on port 80
+  replace:
+    regexp: '^Listen 80'
+    replace: '#Listen 80'
+    path: /etc/httpd/conf/httpd.conf
+  notify:
+    - Restart Apache
+
+- name: Remove unneeded module configuration files in conf.modules.d
+  replace:
+    regexp: '^\s*LoadModule(.*)$'
+    replace: '#LoadModule\1'
+    path: "{{ item }}"
+  with_items:
+    - /etc/httpd/conf.modules.d/00-dav.conf
+    - /etc/httpd/conf.modules.d/00-lua.conf
+    - /etc/httpd/conf.modules.d/01-cgi.conf
+  notify:
+    - Restart Apache
+
+- name: Remove unneeded configuration files in conf.d
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /etc/httpd/conf.d/autoindex.conf
+    - /etc/httpd/conf.d/ssl.conf
+    - /etc/httpd/conf.d/userdir.conf
+    - /etc/httpd/conf.d/welcome.conf
+  notify:
+    - Restart Apache
+
+- name: Remove unneeded proxy modules
+  replace:
+    regexp: '^LoadModule {{ item }}_module modules/mod_{{ item }}\.so'
+    replace: '#LoadModule {{ item }} modules/mod_{{ item }}.so'
+    path: /etc/httpd/conf.modules.d/00-proxy.conf
+  with_items:
+    - lbmethod_bybusyness
+    - lbmethod_byrequests
+    - lbmethod_bytraffic
+    - lbmethod_heartbeat
+    - proxy_ajp
+    - proxy_balancer
+    - proxy_connect
+    - proxy_express
+    - proxy_fcgi
+    - proxy_fdpass
+    - proxy_ftp
+    - proxy_scgi
+    - proxy_wstunnel
+  notify:
+    - Restart Apache
+
+- name: Create LDAP auth proxy configuration
+  template:
+    src: 00-ldap-proxy.conf.j2
+    dest: /etc/httpd/conf.d/00-ldap-proxy.conf
+    owner: root
+    group: root
+    mode: 0644
+    seuser: system_u
+    serole: object_r
+    setype: httpd_config_t
+  notify:
+    - Restart Apache
+
+- name: Copy Apache TLS certs and key
+  copy:
+    content: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0600
+    seuser: system_u
+    serole: object_r
+    setype: cert_t
+  with_items:
+    - { src: '{{ apache_ldap_ssl_crt }}', dest: '{{ apache_ldap_ssl_crt_dest }}' }
+    - { src: '{{ apache_ldap_ssl_ca }}', dest: '{{ apache_ldap_ssl_ca_dest }}' }
+    - { src: '{{ apache_ldap_ssl_key }}', dest: '{{ apache_ldap_ssl_key_dest }}' }
+  notify:
+    - Restart Apache
+
+- name: Start and enable Apache
+  service:
+    name: httpd
+    state: started
+    enabled: "True"

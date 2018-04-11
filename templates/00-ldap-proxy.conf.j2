@@ -1,0 +1,46 @@
+#jinja2: lstrip_blocks: "True"
+ServerTokens Prod
+ServerSignature Off
+TraceEnable Off
+
+LDAPSharedCacheSize 500000
+LDAPCacheEntries 1024
+LDAPCacheTTL 600
+LDAPOpCacheEntries 1024
+LDAPOpCacheTTL 600
+
+SSLProtocol         all -SSLv3 -TLSv1 -TLSv1.1
+SSLCipherSuite      ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256
+SSLHonorCipherOrder on
+SSLCompression      off
+
+Listen 443 https
+
+<VirtualHost _default_:443>
+  SSLEngine on
+  SSLProxyEngine on
+  SSLCertificateFile {{ apache_ldap_ssl_crt_dest }}
+  SSLCertificateChainFile {{ apache_ldap_ssl_ca_dest }}
+  SSLCertificateKeyFile {{ apache_ldap_ssl_key_dest }}
+
+  <Location "/">
+    AuthType Basic
+    AuthName "{{ apache_auth_name }}"
+    AuthBasicProvider ldap
+    AuthLDAPURL "{{ apache_ldap_url }}" TLS
+    AuthLDAPBindDN "{{ apache_ldap_bind_dn }}"
+    AuthLDAPBindPassword "{{ apache_ldap_bind_password }}"
+
+    AuthLDAPGroupAttribute memberUid uid
+    AuthLDAPGroupAttributeIsDN off
+
+    {% for item in apache_auth_groups.groups %}
+    Require ldap-group {{ item }}
+    {% endfor %}
+
+    # Note: The below overrides the user provided credentials from LDAP to avoid maintaining a separate
+    #       user credential database in SearchGuard.
+    RequestHeader Set Authorization "Basic {{ (apache_proxy_user_username+':'+apache_proxy_user_password) | b64encode }}"
+    ProxyPass {{ apache_proxy_dest }}
+  </Location>
+</VirtualHost>
